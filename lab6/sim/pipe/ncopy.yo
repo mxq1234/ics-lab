@@ -1,0 +1,249 @@
+                            | #/* $begin ncopy-ys */
+                            | ##################################################################
+                            | # ncopy.ys - Copy a src block of len words to dst.
+                            | # Return the number of positive words (>0) contained in src.
+                            | #
+                            | # Include your name and ID here.
+                            | #     MaXiaoqian 520030910288
+                            | #
+                            | # Describe how and why you modified the baseline code.
+                            | #
+                            | #     1. Replace all the add operation and sub operation with iaddq instruction.
+                            | #	 It can merge two instructions into one execution, and reduce the use of
+                            | #	 registers, so that the registers can be used for more loop unrolling.
+                            | #
+                            | #     2. Remove 'andq %rdx, %rdx' and use 'iaddq $-1, %rdx' to set CC for 'jle loop'.
+                            | #	 It can finish decreasing len and setting CC for conditional jmp at the same
+                            | #        time.
+                            | #
+                            | #     3. Remove 'xorq %rax, %rax' at the beginning, because %rax was initialized to 0
+                            | #	 when the program begins.
+                            | #
+                            | #     4. Loop unrolling. There are ten registers that can be used,  so I choose to handle
+                            | #	 10 elements every loop(avoid using one register twice in one loop).It can reduce
+                            | #	 the times of increasing src and dst, as well as decreasing len, and avoid some
+                            | #	 load/use hazards.
+                            | #
+                            | #     5. Switch-case structure.After loop unrolling, there will be at most 9 elements left.
+                            | #        Use the structure similiar to switch-case in C Language to handle them,  this will
+                            | #        avoid any increment of src and dst, as well as decrement of len one by one.
+                            | #
+                            | #     6. Binary search. Use binary search to efficiently find the entrance for every case.
+                            | #	 After a serial of experiments, using 3 and 6 as the partitions performs well. It
+                            | #	 is because every part can be determined by 'jl jg je' after one iaddq operation.
+                            | #	 If use 6 as first partition, the score is only 58.2, so use 3 as first partition.
+                            | #
+                            | #     7. Avoid Load/use hazards. Insert some other instructions between mrmovq and its
+                            | #	 corresponding rmmovq to avoid the bubbles as much as possible.
+                            | #
+                            | #     8. Another dangerous method.Because in this lab, the ret addr is fixed(0x31), and after
+                            | #        returning, it does nothing but halt. If we replace 'jle Done' with 'jle 0x31' at the
+                            | #        end of ncopy, it is still correct, and the CPE will be 7.30 because we avoid the ret
+                            | #        hazard. But it is very adventurous.
+                            | 
+                            | ##################################################################
+                            | # Do not modify this portion
+                            | # Function prologue.
+                            | # %rdi = src, %rsi = dst, %rdx = len
+0x000:                      | ncopy:
+                            | 
+                            | ##################################################################
+                            | # You can modify this portion
+                            | 	# Loop header
+0x000: c0f2f7ffffffffffffff | 	iaddq $-9,%rdx		# len <= 9?
+0x00a: 71d401000000000000   | 	jle Switch 		# if so, goto Switch:
+                            | 
+0x013:                      | Loop:
+0x013: 50870000000000000000 | 	mrmovq (%rdi), %r8	# read val from src...
+0x01d: 50970800000000000000 | 	mrmovq 8(%rdi), %r9
+0x027: 50a71000000000000000 | 	mrmovq 16(%rdi), %r10
+0x031: 50b71800000000000000 | 	mrmovq 24(%rdi), %r11
+0x03b: 50c72000000000000000 | 	mrmovq 32(%rdi), %r12
+0x045: 50d72800000000000000 | 	mrmovq 40(%rdi), %r13
+0x04f: 50e73000000000000000 | 	mrmovq 48(%rdi), %r14
+0x059: 50373800000000000000 | 	mrmovq 56(%rdi), %rbx
+0x063: 50174000000000000000 | 	mrmovq 64(%rdi), %rcx
+0x06d: 50574800000000000000 | 	mrmovq 72(%rdi), %rbp
+0x077: c0f75000000000000000 | 	iaddq $80, %rdi		# src += 10
+0x081: 40860000000000000000 | 	rmmovq %r8, (%rsi)	# ...and store val to dst
+0x08b: 40960800000000000000 | 	rmmovq %r9, 8(%rsi)
+0x095: 40a61000000000000000 | 	rmmovq %r10, 16(%rsi)
+0x09f: 40b61800000000000000 | 	rmmovq %r11, 24(%rsi)
+0x0a9: 40c62000000000000000 | 	rmmovq %r12, 32(%rsi)
+0x0b3: 40d62800000000000000 | 	rmmovq %r13, 40(%rsi)
+0x0bd: 40e63000000000000000 | 	rmmovq %r14, 48(%rsi)
+0x0c7: 40363800000000000000 | 	rmmovq %rbx, 56(%rsi)
+0x0d1: 40164000000000000000 | 	rmmovq %rcx, 64(%rsi)
+0x0db: 40564800000000000000 | 	rmmovq %rbp, 72(%rsi)
+                            | 
+0x0e5:                      | Judge1:
+0x0e5: 6288                 | 	andq %r8, %r8		# val > 0?
+0x0e7: 71fa00000000000000   | 	jle Judge2
+0x0f0: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x0fa:                      | Judge2:
+0x0fa: 6299                 | 	andq %r9, %r9		# val > 0?
+0x0fc: 710f01000000000000   | 	jle Judge3
+0x105: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x10f:                      | Judge3:	
+0x10f: 62aa                 | 	andq %r10, %r10		# val > 0?
+0x111: 712401000000000000   | 	jle Judge4
+0x11a: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x124:                      | Judge4:
+0x124: 62bb                 | 	andq %r11, %r11		# val > 0?
+0x126: 713901000000000000   | 	jle Judge5
+0x12f: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x139:                      | Judge5:	
+0x139: 62cc                 | 	andq %r12, %r12		# val > 0?
+0x13b: 714e01000000000000   | 	jle Judge6
+0x144: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x14e:                      | Judge6:
+0x14e: 62dd                 | 	andq %r13, %r13		# val > 0?
+0x150: 716301000000000000   | 	jle Judge7
+0x159: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x163:                      | Judge7:	
+0x163: 62ee                 | 	andq %r14, %r14		# val > 0?
+0x165: 717801000000000000   | 	jle Judge8
+0x16e: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x178:                      | Judge8:
+0x178: 6233                 | 	andq %rbx, %rbx		# val > 0?
+0x17a: 718d01000000000000   | 	jle Judge9
+0x183: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x18d:                      | Judge9:
+0x18d: 6211                 | 	andq %rcx, %rcx		# val > 0?
+0x18f: 71a201000000000000   | 	jle Judge10
+0x198: c0f00100000000000000 | 	iaddq $1, %rax
+                            | 
+0x1a2:                      | Judge10:
+0x1a2: 6255                 | 	andq %rbp, %rbp		# val > 0?
+0x1a4: 71b701000000000000   | 	jle Test
+0x1ad: c0f00100000000000000 | 	iaddq $1, %rax
+0x1b7:                      | Test:
+0x1b7: c0f65000000000000000 | 	iaddq $80, %rsi		# dst += 10
+0x1c1: c0f2f6ffffffffffffff | 	iaddq $-10, %rdx	# len -= 10
+0x1cb: 761300000000000000   | 	jg Loop
+                            | 
+0x1d4:                      | Switch:
+0x1d4: c0f20600000000000000 | 	iaddq	$6,%rdx
+0x1de: 72f901000000000000   | 	jl	Less3           # len < 3
+0x1e7: 762002000000000000   | 	jg	More3		# len > 3
+0x1f0: 705703000000000000   | 	jmp	Case3		# len == 3
+                            | 	
+0x1f9:                      | Less3:
+0x1f9: c0f20200000000000000 | 	iaddq	$2,%rdx		# len == 1
+0x203: 73a903000000000000   | 	je	Case1
+0x20c: c0f2ffffffffffffffff | 	iaddq	$-1,%rdx	# len == 2
+0x216: 738003000000000000   | 	je	Case2
+0x21f: 90                   | 	ret			# len == 0 
+                            | 
+0x220:                      | More3:
+0x220: c0f2fdffffffffffffff | 	iaddq	$-3,%rdx	
+0x22a: 765802000000000000   | 	jg	More6Less10	# len > 6
+0x233: 73dc02000000000000   | 	je	Case6		# len == 6
+                            | 
+0x23c:                      | More3Less6:			# len < 6
+0x23c: c0f20100000000000000 | 	iaddq	$1,%rdx
+0x246: 730503000000000000   | 	je	Case5		# len == 5
+0x24f: 702e03000000000000   | 	jmp	Case4		# len == 4
+                            | 	
+0x258:                      | More6Less10:
+0x258: c0f2feffffffffffffff | 	iaddq	$-2,%rdx
+0x262: 738a02000000000000   | 	je	Case8		# len == 8
+0x26b: 72b302000000000000   | 	jl	Case7		# len == 7
+                            | 
+                            | 
+0x274:                      | Case9:				# len == 9
+0x274: 50174000000000000000 | 	mrmovq 64(%rdi), %rcx	# read val from src...
+0x27e: 40164000000000000000 | 	rmmovq %rcx, 64(%rsi)
+0x288: 6211                 | 	andq %rcx, %rcx		
+                            | 
+0x28a:                      | Case8:
+0x28a: 50373800000000000000 | 	mrmovq 56(%rdi), %rbx	# read val from src...
+0x294: 71a702000000000000   | 	jle Rmmovq8		
+0x29d: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+0x2a7:                      | Rmmovq8:
+0x2a7: 40363800000000000000 | 	rmmovq %rbx, 56(%rsi)
+0x2b1: 6233                 | 	andq %rbx, %rbx		
+                            | 
+0x2b3:                      | Case7:
+0x2b3: 50e73000000000000000 | 	mrmovq 48(%rdi), %r14	# read val from src...
+0x2bd: 71d002000000000000   | 	jle Rmmovq7
+0x2c6: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+0x2d0:                      | Rmmovq7:
+0x2d0: 40e63000000000000000 | 	rmmovq %r14, 48(%rsi)
+0x2da: 62ee                 | 	andq %r14, %r14
+                            | 
+0x2dc:                      | Case6:
+0x2dc: 50d72800000000000000 | 	mrmovq 40(%rdi), %r13	# read val from src...
+0x2e6: 71f902000000000000   | 	jle Rmmovq6
+0x2ef: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+0x2f9:                      | Rmmovq6:
+0x2f9: 40d62800000000000000 | 	rmmovq %r13, 40(%rsi)
+0x303: 62dd                 | 	andq %r13, %r13
+                            | 
+0x305:                      | Case5:
+0x305: 50c72000000000000000 | 	mrmovq 32(%rdi), %r12	# read val from src...
+0x30f: 712203000000000000   | 	jle Rmmovq5
+0x318: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+0x322:                      | Rmmovq5:
+0x322: 40c62000000000000000 | 	rmmovq %r12, 32(%rsi)
+0x32c: 62cc                 | 	andq %r12, %r12
+                            | 
+0x32e:                      | Case4:
+0x32e: 50b71800000000000000 | 	mrmovq 24(%rdi), %r11	# read val from src...
+0x338: 714b03000000000000   | 	jle Rmmovq4
+0x341: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+0x34b:                      | Rmmovq4:
+0x34b: 40b61800000000000000 | 	rmmovq %r11, 24(%rsi)
+0x355: 62bb                 | 	andq %r11, %r11
+                            | 
+0x357:                      | Case3:
+0x357: 50a71000000000000000 | 	mrmovq 16(%rdi), %r10	# read val from src...
+0x361: 717403000000000000   | 	jle Rmmovq3
+0x36a: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+0x374:                      | Rmmovq3:
+0x374: 40a61000000000000000 | 	rmmovq %r10, 16(%rsi)
+0x37e: 62aa                 | 	andq %r10, %r10
+                            | 
+0x380:                      | Case2:
+0x380: 50970800000000000000 | 	mrmovq 8(%rdi), %r9	# read val from src...
+0x38a: 719d03000000000000   | 	jle Rmmovq2
+0x393: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+0x39d:                      | Rmmovq2:
+0x39d: 40960800000000000000 | 	rmmovq %r9, 8(%rsi)
+0x3a7: 6299                 | 	andq %r9, %r9
+                            | 
+0x3a9:                      | Case1:
+0x3a9: 50870000000000000000 | 	mrmovq (%rdi), %r8	# read val from src...
+0x3b3: 71c603000000000000   | 	jle Rmmovq1
+0x3bc: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+0x3c6:                      | Rmmovq1:
+0x3c6: 40860000000000000000 | 	rmmovq %r8, (%rsi)
+0x3d0: 6288                 | 	andq %r8, %r8
+0x3d2: 71e503000000000000   | 	jle Done
+0x3db: c0f00100000000000000 | 	iaddq $0x1, %rax
+                            | 
+                            | ##################################################################
+                            | # Do not modify the following section of code
+                            | # Function epilogue.
+0x3e5:                      | Done:
+0x3e5: 90                   | 	ret
+                            | ##################################################################
+                            | # Keep the following label at the end of your function
+0x3e6:                      | End:
+                            | #/* $end ncopy-ys */

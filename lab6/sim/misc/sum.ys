@@ -1,0 +1,41 @@
+# MaXiaoqian 520030910288
+# Execution begins at address 0
+	.pos 0
+	irmovq stack, %rsp	# Set up stack pointer
+	call main		# Execute main program
+	halt
+
+# Sample linked list
+	.align 8
+list:
+	ele1:
+		.quad 0x00a
+		.quad ele2
+	ele2:
+		.quad 0x0b0
+		.quad ele3
+	ele3:
+		.quad 0xc00
+		.quad 0
+
+main:	irmovq list, %rdi
+	call sum_list
+	ret
+
+# long sum_list(list_ptr ls)
+sum_list:
+	xorq %rax, %rax		# long val = 0
+test:
+	andq %rdi, %rdi		# while(ls)
+	jne  loop
+	ret
+
+loop:
+	mrmovq (%rdi), %rsi	# ls->val
+	addq %rsi, %rax		# val += ls->val
+	mrmovq 8(%rdi), %rdi	# ls = ls->next
+	jmp test
+
+
+	.pos 0x200
+stack:

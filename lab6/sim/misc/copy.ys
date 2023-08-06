@@ -1,0 +1,49 @@
+# MaXiaoqian 520030910288
+# Execution begins at address 0
+	.pos 0
+	irmovq stack, %rsp	# Set up stack pointer
+	call main		# Execute main program
+	halt
+
+	.align 8
+# Source block
+src:
+	.quad 0x00a
+	.quad 0x0b0
+	.quad 0xc00
+
+# Destination block
+dest:
+	.quad 0x111
+	.quad 0x222
+	.quad 0x333
+
+main:
+	irmovq src, %rdi	# passing arguments for copy_block
+	irmovq dest, %rsi
+	irmovq $3, %rdx
+	call copy_block
+	ret
+
+# long copy_block(long *src, long *dest, long len)
+copy_block:
+	xorq %rax, %rax		# result = 0
+	irmovq $8, %r8		# store the immediates in registers for operations
+	irmovq $1, %r9
+
+	andq %rdx, %rdx		# len > 0?
+	jg   loop		# if so, go to loop
+	ret
+loop:
+	mrmovq (%rdi), %rcx	# val = *src
+	addq %r8, %rdi		# src++
+	rmmovq %rcx, (%rsi)	# *dest = val
+	addq %r8, %rsi		# dest++
+	xorq %rcx, %rax		# result ^= val
+	subq %r9, %rdx		# len--
+	andq %rdx, %rdx		# len > 0?
+	jg loop			# if so, go to loop
+	ret
+
+	.pos 0x500
+stack:

@@ -1,0 +1,41 @@
+# MaXiaoqian 520030910288
+# Execution begins at address 0
+	.pos 0
+	irmovq stack, %rsp	# Set up stack pointer
+	call main		# Execute main program
+	halt			# Terminate program
+
+# Sample linked list
+	.align 8
+list:
+	ele1:
+		.quad 0x00a
+		.quad ele2
+	ele2:
+		.quad 0x0b0
+		.quad ele3
+	ele3:
+		.quad 0xc00
+		.quad 0
+
+main:	irmovq list, %rdi
+	call rsum_list
+	ret
+
+# long rsum_list(list_ptr ls)
+rsum_list:
+	andq %rdi, %rdi		# ls != 0?
+	jne  recur		# if so, jmp to recursive section
+	irmovq $0, %rax		# return 0
+	ret
+recur:
+	mrmovq (%rdi), %rsi	# val = ls->val
+	pushq  %rsi		# store the caller saved register %rsi(ls->val)
+	mrmovq 8(%rdi), %rdi	# pass the first argument ls->next
+	call rsum_list
+	popq   %rsi		# restore the %rsi(val)
+	addq %rsi, %rax		# val + rest
+	ret
+
+	.pos 0x200
+stack:

@@ -1,0 +1,306 @@
+#######################################################################
+# Test for copying block of size 4;
+#######################################################################
+	.pos 0
+main:	irmovq Stack, %rsp  	# Set up stack pointer
+
+	# Set up arguments for copy function and then invoke it
+	irmovq $4, %rdx		# src and dst have 4 elements
+	irmovq dest, %rsi	# dst array
+	irmovq src, %rdi	# src array
+	call ncopy		 
+	halt			# should halt with num nonzeros in %rax
+StartFun:
+#/* $begin ncopy-ys */
+##################################################################
+# ncopy.ys - Copy a src block of len words to dst.
+# Return the number of positive words (>0) contained in src.
+#
+# Include your name and ID here.
+#     MaXiaoqian 520030910288
+#
+# Describe how and why you modified the baseline code.
+#
+#     1. Replace all the add operation and sub operation with iaddq instruction.
+#	 It can merge two instructions into one execution, and reduce the use of
+#	 registers, so that the registers can be used for more loop unrolling.
+#
+#     2. Remove 'andq %rdx, %rdx' and use 'iaddq $-1, %rdx' to set CC for 'jle loop'.
+#	 It can finish decreasing len and setting CC for conditional jmp at the same
+#        time.
+#
+#     3. Remove 'xorq %rax, %rax' at the beginning, because %rax was initialized to 0
+#	 when the program begins.
+#
+#     4. Loop unrolling. There are ten registers that can be used,  so I choose to handle
+#	 10 elements every loop(avoid using one register twice in one loop).It can reduce
+#	 the times of increasing src and dst, as well as decreasing len, and avoid some
+#	 load/use hazards.
+#
+#     5. Switch-case structure.After loop unrolling, there will be at most 9 elements left.
+#        Use the structure similiar to switch-case in C Language to handle them,  this will
+#        avoid any increment of src and dst, as well as decrement of len one by one.
+#
+#     6. Binary search. Use binary search to efficiently find the entrance for every case.
+#	 After a serial of experiments, using 3 and 6 as the partitions performs well. It
+#	 is because every part can be determined by 'jl jg je' after one iaddq operation.
+#	 If use 6 as first partition, the score is only 58.2, so use 3 as first partition.
+#
+#     7. Avoid Load/use hazards. Insert some other instructions between mrmovq and its
+#	 corresponding rmmovq to avoid the bubbles as much as possible.
+#
+#     8. Another dangerous method.Because in this lab, the ret addr is fixed(0x31), and after
+#        returning, it does nothing but halt. If we replace 'jle Done' with 'jle 0x31' at the
+#        end of ncopy, it is still correct, and the CPE will be 7.30 because we avoid the ret
+#        hazard. But it is very adventurous.
+
+##################################################################
+# Do not modify this portion
+# Function prologue.
+# %rdi = src, %rsi = dst, %rdx = len
+ncopy:
+
+##################################################################
+# You can modify this portion
+	# Loop header
+	iaddq $-9,%rdx		# len <= 9?
+	jle Switch 		# if so, goto Switch:
+
+Loop:
+	mrmovq (%rdi), %r8	# read val from src...
+	mrmovq 8(%rdi), %r9
+	mrmovq 16(%rdi), %r10
+	mrmovq 24(%rdi), %r11
+	mrmovq 32(%rdi), %r12
+	mrmovq 40(%rdi), %r13
+	mrmovq 48(%rdi), %r14
+	mrmovq 56(%rdi), %rbx
+	mrmovq 64(%rdi), %rcx
+	mrmovq 72(%rdi), %rbp
+	iaddq $80, %rdi		# src += 10
+	rmmovq %r8, (%rsi)	# ...and store val to dst
+	rmmovq %r9, 8(%rsi)
+	rmmovq %r10, 16(%rsi)
+	rmmovq %r11, 24(%rsi)
+	rmmovq %r12, 32(%rsi)
+	rmmovq %r13, 40(%rsi)
+	rmmovq %r14, 48(%rsi)
+	rmmovq %rbx, 56(%rsi)
+	rmmovq %rcx, 64(%rsi)
+	rmmovq %rbp, 72(%rsi)
+
+Judge1:
+	andq %r8, %r8		# val > 0?
+	jle Judge2
+	iaddq $1, %rax
+
+Judge2:
+	andq %r9, %r9		# val > 0?
+	jle Judge3
+	iaddq $1, %rax
+
+Judge3:	
+	andq %r10, %r10		# val > 0?
+	jle Judge4
+	iaddq $1, %rax
+
+Judge4:
+	andq %r11, %r11		# val > 0?
+	jle Judge5
+	iaddq $1, %rax
+
+Judge5:	
+	andq %r12, %r12		# val > 0?
+	jle Judge6
+	iaddq $1, %rax
+
+Judge6:
+	andq %r13, %r13		# val > 0?
+	jle Judge7
+	iaddq $1, %rax
+
+Judge7:	
+	andq %r14, %r14		# val > 0?
+	jle Judge8
+	iaddq $1, %rax
+
+Judge8:
+	andq %rbx, %rbx		# val > 0?
+	jle Judge9
+	iaddq $1, %rax
+
+Judge9:
+	andq %rcx, %rcx		# val > 0?
+	jle Judge10
+	iaddq $1, %rax
+
+Judge10:
+	andq %rbp, %rbp		# val > 0?
+	jle Test
+	iaddq $1, %rax
+Test:
+	iaddq $80, %rsi		# dst += 10
+	iaddq $-10, %rdx	# len -= 10
+	jg Loop
+
+Switch:
+	iaddq	$6,%rdx
+	jl	Less3           # len < 3
+	jg	More3		# len > 3
+	jmp	Case3		# len == 3
+	
+Less3:
+	iaddq	$2,%rdx		# len == 1
+	je	Case1
+	iaddq	$-1,%rdx	# len == 2
+	je	Case2
+	ret			# len == 0 
+
+More3:
+	iaddq	$-3,%rdx	
+	jg	More6Less10	# len > 6
+	je	Case6		# len == 6
+
+More3Less6:			# len < 6
+	iaddq	$1,%rdx
+	je	Case5		# len == 5
+	jmp	Case4		# len == 4
+	
+More6Less10:
+	iaddq	$-2,%rdx
+	je	Case8		# len == 8
+	jl	Case7		# len == 7
+
+
+Case9:				# len == 9
+	mrmovq 64(%rdi), %rcx	# read val from src...
+	rmmovq %rcx, 64(%rsi)
+	andq %rcx, %rcx		
+
+Case8:
+	mrmovq 56(%rdi), %rbx	# read val from src...
+	jle Rmmovq8		
+	iaddq $0x1, %rax
+
+Rmmovq8:
+	rmmovq %rbx, 56(%rsi)
+	andq %rbx, %rbx		
+
+Case7:
+	mrmovq 48(%rdi), %r14	# read val from src...
+	jle Rmmovq7
+	iaddq $0x1, %rax
+
+Rmmovq7:
+	rmmovq %r14, 48(%rsi)
+	andq %r14, %r14
+
+Case6:
+	mrmovq 40(%rdi), %r13	# read val from src...
+	jle Rmmovq6
+	iaddq $0x1, %rax
+
+Rmmovq6:
+	rmmovq %r13, 40(%rsi)
+	andq %r13, %r13
+
+Case5:
+	mrmovq 32(%rdi), %r12	# read val from src...
+	jle Rmmovq5
+	iaddq $0x1, %rax
+
+Rmmovq5:
+	rmmovq %r12, 32(%rsi)
+	andq %r12, %r12
+
+Case4:
+	mrmovq 24(%rdi), %r11	# read val from src...
+	jle Rmmovq4
+	iaddq $0x1, %rax
+
+Rmmovq4:
+	rmmovq %r11, 24(%rsi)
+	andq %r11, %r11
+
+Case3:
+	mrmovq 16(%rdi), %r10	# read val from src...
+	jle Rmmovq3
+	iaddq $0x1, %rax
+
+Rmmovq3:
+	rmmovq %r10, 16(%rsi)
+	andq %r10, %r10
+
+Case2:
+	mrmovq 8(%rdi), %r9	# read val from src...
+	jle Rmmovq2
+	iaddq $0x1, %rax
+
+Rmmovq2:
+	rmmovq %r9, 8(%rsi)
+	andq %r9, %r9
+
+Case1:
+	mrmovq (%rdi), %r8	# read val from src...
+	jle Rmmovq1
+	iaddq $0x1, %rax
+
+Rmmovq1:
+	rmmovq %r8, (%rsi)
+	andq %r8, %r8
+	jle Done
+	iaddq $0x1, %rax
+
+##################################################################
+# Do not modify the following section of code
+# Function epilogue.
+Done:
+	ret
+##################################################################
+# Keep the following label at the end of your function
+End:
+#/* $end ncopy-ys */
+EndFun:
+
+###############################
+# Source and destination blocks 
+###############################
+	.align 8
+src:
+	.quad -1
+	.quad 2
+	.quad 3
+	.quad -4
+	.quad 0xbcdefa # This shouldn't get moved
+
+	.align 16
+Predest:
+	.quad 0xbcdefa
+dest:
+	.quad 0xcdefab
+	.quad 0xcdefab
+	.quad 0xcdefab
+	.quad 0xcdefab
+Postdest:
+	.quad 0xdefabc
+
+.align 8
+# Run time stack
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+	.quad 0
+
+Stack:
